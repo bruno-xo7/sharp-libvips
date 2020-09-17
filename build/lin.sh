@@ -66,18 +66,15 @@ unset PKG_CONFIG_PATH
 # Dependency version numbers
 VERSION_ZLIB=1.2.11
 VERSION_FFI=3.3
-VERSION_GLIB=2.65.3
+VERSION_GLIB=2.66.0
 VERSION_XML2=2.9.10
 VERSION_GSF=1.14.47
 VERSION_EXIF=0.6.22
 VERSION_LCMS2=2.11
-VERSION_JPEG=2.0.5
 VERSION_PNG16=1.6.37
-VERSION_SPNG=0.6.0
+VERSION_SPNG=0.6.1
 VERSION_WEBP=1.1.0
-VERSION_TIFF=4.1.0
-VERSION_ORC=0.4.31
-VERSION_GETTEXT=0.21
+VERSION_ORC=0.4.32
 VERSION_GDKPIXBUF=2.40.0
 VERSION_FREETYPE=2.10.2
 VERSION_EXPAT=2.2.9
@@ -87,8 +84,9 @@ VERSION_PIXMAN=0.40.0
 VERSION_CAIRO=1.16.0
 VERSION_FRIBIDI=1.0.10
 VERSION_PANGO=1.46.1
-VERSION_SVG=2.49.5
+VERSION_SVG=2.50.0
 VERSION_GIF=5.1.4
+VERSION_MOZJPEG=3.3.1
 
 # Remove patch version component
 without_patch() {
@@ -111,36 +109,22 @@ version_latest "xml2" "$VERSION_XML2" "1783"
 version_latest "gsf" "$VERSION_GSF" "1980"
 version_latest "exif" "$VERSION_EXIF" "1607"
 version_latest "lcms2" "$VERSION_LCMS2" "9815"
-version_latest "jpeg" "$VERSION_JPEG" "1648"
 version_latest "png" "$VERSION_PNG16" "1705"
 version_latest "spng" "$VERSION_SPNG" "24289"
 version_latest "webp" "$VERSION_WEBP" "1761"
-version_latest "tiff" "$VERSION_TIFF" "13521"
 version_latest "orc" "$VERSION_ORC" "2573"
-version_latest "gettext" "$VERSION_GETTEXT" "898"
 version_latest "gdkpixbuf" "$VERSION_GDKPIXBUF" "9533"
 version_latest "freetype" "$VERSION_FREETYPE" "854"
 version_latest "expat" "$VERSION_EXPAT" "770"
 version_latest "fontconfig" "$VERSION_FONTCONFIG" "827"
 version_latest "harfbuzz" "$VERSION_HARFBUZZ" "1299"
 version_latest "pixman" "$VERSION_PIXMAN" "3648"
-#version_latest "cairo" "$VERSION_CAIRO" "247" # latest version in release monitoring is unstable
+#version_latest "cairo" "$VERSION_CAIRO" "247"
 version_latest "fribidi" "$VERSION_FRIBIDI" "857"
 version_latest "pango" "$VERSION_PANGO" "11783"
 version_latest "svg" "$VERSION_SVG" "5420"
 #version_latest "gif" "$VERSION_GIF" "1158" # v5.1.5+ provides a Makefile only so will require custom cross-compilation setup
 if [ "$ALL_AT_VERSION_LATEST" = "false" ]; then exit 1; fi
-
-# Download and build dependencies from source
-
-if [ "${PLATFORM%-*}" == "linuxmusl" ] || [ "$DARWIN" = true ]; then
-  mkdir ${DEPS}/gettext
-  curl -Ls https://ftp.gnu.org/pub/gnu/gettext/gettext-${VERSION_GETTEXT}.tar.xz | tar xJC ${DEPS}/gettext --strip-components=1
-  cd ${DEPS}/gettext/gettext-runtime
-  ./configure --host=${CHOST} --prefix=${TARGET} --enable-static --disable-shared --disable-dependency-tracking \
-    --disable-libasprintf --disable-java --disable-native-java --disable-csharp
-  make install-strip
-fi
 
 mkdir ${DEPS}/zlib
 curl -Ls https://zlib.net/zlib-${VERSION_ZLIB}.tar.xz | tar xJC ${DEPS}/zlib --strip-components=1
@@ -198,12 +182,13 @@ cd ${DEPS}/lcms2
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-static --disable-shared --disable-dependency-tracking
 make install-strip
 
-mkdir ${DEPS}/jpeg
-curl -Ls https://github.com/libjpeg-turbo/libjpeg-turbo/archive/${VERSION_JPEG}.tar.gz | tar xzC ${DEPS}/jpeg --strip-components=1
-cd ${DEPS}/jpeg
-LDFLAGS=${LDFLAGS/\$/} cmake -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=${ROOT}/Toolchain.cmake -DCMAKE_INSTALL_PREFIX=${TARGET} -DCMAKE_INSTALL_LIBDIR=${TARGET}/lib \
-  -DENABLE_STATIC=TRUE -DENABLE_SHARED=FALSE -DWITH_JPEG8=1 -DWITH_TURBOJPEG=FALSE
-make install/strip
+mkdir ${DEPS}/mozjpeg
+curl -Ls https://github.com/mozilla/mozjpeg/archive/v${VERSION_MOZJPEG}.tar.gz | tar xzC ${DEPS}/mozjpeg --strip-components=1
+cd ${DEPS}/mozjpeg
+aclocal && autoconf && autoheader && libtoolize && automake --add-missing
+./configure --host=${CHOST} --prefix=${TARGET} --enable-static --disable-shared --disable-dependency-tracking --with-jpeg8
+make install-strip
+cp jpegint.h ${TARGET}/include/jpegint.h
 
 mkdir ${DEPS}/png16
 curl -Ls https://sourceforge.mirrorservice.org/l/li/libpng/libpng16/${VERSION_PNG16}/libpng-${VERSION_PNG16}.tar.xz | tar xJC ${DEPS}/png16 --strip-components=1
@@ -214,7 +199,7 @@ make install-strip
 mkdir ${DEPS}/spng
 curl -Ls https://github.com/randy408/libspng/archive/v${VERSION_SPNG}.tar.gz | tar xzC ${DEPS}/spng --strip-components=1
 cd ${DEPS}/spng
-patch -p1 < ${PACKAGE}/build/patches/libspng-0.6-fixes.patch
+#patch -p1 < ${PACKAGE}/build/patches/libspng-0.6-fixes.patch
 meson setup _build --default-library=static --buildtype=release --strip --prefix=${TARGET} ${MESON} \
   -Dstatic_zlib=true
 ninja -C _build
@@ -225,15 +210,6 @@ curl -Ls https://storage.googleapis.com/downloads.webmproject.org/releases/webp/
 cd ${DEPS}/webp
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-static --disable-shared --disable-dependency-tracking \
   --disable-neon --enable-libwebpmux --enable-libwebpdemux
-make install-strip
-
-mkdir ${DEPS}/tiff
-curl -Ls https://download.osgeo.org/libtiff/tiff-${VERSION_TIFF}.tar.gz | tar xzC ${DEPS}/tiff --strip-components=1
-cd ${DEPS}/tiff
-if [ -n "${CHOST}" ]; then autoreconf -fiv; fi
-./configure --host=${CHOST} --prefix=${TARGET} --enable-static --disable-shared --disable-dependency-tracking \
-  --disable-mdi --disable-pixarlog --disable-old-jpeg --disable-cxx --disable-lzma --disable-zstd \
-  --with-jpeg-include-dir=${TARGET}/include --with-jpeg-lib-dir=${TARGET}/lib
 make install-strip
 
 mkdir ${DEPS}/orc
@@ -359,7 +335,8 @@ cd ${DEPS}/vips
 ./configure --host=${CHOST} --prefix=${TARGET} --enable-shared --disable-static --disable-dependency-tracking \
   --disable-debug --disable-deprecated --disable-introspection --without-analyze --without-cfitsio --without-fftw \
   --without-heif --without-imagequant --without-magick --without-matio --without-nifti --without-OpenEXR \
-  --without-openslide --without-pdfium --without-poppler --without-ppm --without-radiance \
+  --without-openslide --without-pdfium --without-poppler --without-ppm --without-radiance --without-tiff \
+  --with-jpeg-includes=${DEPS}/mozjpeg/include --with-jpeg-libraries=${DEPS}/mozjpeg/lib64 \
   ${LINUX:+LDFLAGS="$LDFLAGS -Wl,-Bsymbolic-functions"}
 # https://docs.fedoraproject.org/en-US/packaging-guidelines/#_removing_rpath
 sed -i'.bak' 's|^hardcode_libdir_flag_spec=.*|hardcode_libdir_flag_spec=""|g' libtool
@@ -420,12 +397,10 @@ printf "{\n\
   \"freetype\": \"${VERSION_FREETYPE}\",\n\
   \"fribidi\": \"${VERSION_FRIBIDI}\",\n\
   \"gdkpixbuf\": \"${VERSION_GDKPIXBUF}\",\n\
-  \"gettext\": \"${VERSION_GETTEXT}\",\n\
   \"gif\": \"${VERSION_GIF}\",\n\
   \"glib\": \"${VERSION_GLIB}\",\n\
   \"gsf\": \"${VERSION_GSF}\",\n\
   \"harfbuzz\": \"${VERSION_HARFBUZZ}\",\n\
-  \"jpeg\": \"${VERSION_JPEG}\",\n\
   \"lcms\": \"${VERSION_LCMS2}\",\n\
   \"orc\": \"${VERSION_ORC}\",\n\
   \"pango\": \"${VERSION_PANGO}\",\n\
@@ -433,11 +408,11 @@ printf "{\n\
   \"png\": \"${VERSION_PNG16}\",\n\
   \"svg\": \"${VERSION_SVG}\",\n\
   \"spng\": \"${VERSION_SPNG}\",\n\
-  \"tiff\": \"${VERSION_TIFF}\",\n\
   \"vips\": \"${VERSION_VIPS}\",\n\
   \"webp\": \"${VERSION_WEBP}\",\n\
   \"xml\": \"${VERSION_XML2}\",\n\
-  \"zlib\": \"${VERSION_ZLIB}\"\n\
+  \"zlib\": \"${VERSION_ZLIB}\",\n\
+  \"mozjpeg\": \"${VERSION_MOZJPEG}\"\n\
 }" >versions.json
 
 printf "\"${PLATFORM}\"" >platform.json
@@ -458,7 +433,7 @@ tar chzf ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.gz \
 advdef --recompress --shrink-insane ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.gz
 
 # Recompress using Brotli, ~15% smaller
-gunzip -c ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.gz | brotli -o ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.br
+gunzip -c ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.gz | brotli -f -o ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.br
 
 # Allow tarballs to be read outside container
 chmod 644 ${PACKAGE}/libvips-${VERSION_VIPS}-${PLATFORM}.tar.*
