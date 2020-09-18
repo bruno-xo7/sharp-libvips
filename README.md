@@ -1,47 +1,51 @@
-# Packaging scripts
+# Libvips for Sharp
 
-libvips and its dependencies are provided as pre-compiled shared libraries
-for the most common operating systems and CPU architectures.
+## Description
 
-During `npm install`, these binaries are fetched as tarballs from
-this repository via HTTPS and stored locally within `node_modules/sharp/vendor`.
+Repackaging of Libvips for Sharp project on Linux-x64 (centos) with support of SVG, JPEG (via mozjpeg), PNG, WEBP, GIF image format.
 
-The base URL can be overridden using the
-`npm_config_sharp_libvips_binary_host` environment variable.
+## Build
 
-https://sharp.pixelplumbing.com/install#custom-prebuilt-binaries
+```
+docker build -t vips-dev-linux-x64
+```
 
-## Creating a tarball
+### Usage
 
-Most people will not need to do this; proceed with caution.
+After the build, fetch the result in the `packaging` directory of the image:
 
-Run the top-level [build script](build.sh) without parameters for help.
+```
+./build.sh
+```
 
-### Linux
+or
 
-One [build script](build/lin.sh) is used to (cross-)compile
-the same shared libraries within multiple containers.
+```
+docker run -it -v $PWD:/local vips-dev-linux-x64 bash
+cp /packaging/* /local
+```
 
-* [x64 glibc](linux-x64/Dockerfile)
-* [x64 musl](linuxmusl-x64/Dockerfile)
-* [ARMv6](linux-armv6/Dockerfile)
-* [ARMv7-A](linux-armv7/Dockerfile)
-* [ARM64v8-A](linux-arm64v8/Dockerfile)
+Publish them under HTTP on the correct folder [expected by Sharp](https://sharp.pixelplumbing.com/install#custom-prebuilt-binaries)
+```
+mkdir v<VERSION>
+mv *.tar.br v<VERSION>/libvips-<VERSION>-linux-x64.tar.br
+http-server -p 8080
+```
 
-### Windows
+Before installing Sharp depency with npm override the `sharp_libvips_binary_host` env to the destination where you have put your libvips.
 
-The output of libvips' [build-win64-mxe](https://github.com/libvips/build-win64-mxe)
-"web" target is [post-processed](build/win.sh) within multiple containers.
+With npm config option:
+```
+npm config set sharp_libvips_binary_host "http://localhost:8080/"
+npm install sharp
+```
 
-* [win32-ia32](win32-ia32/Dockerfile)
-* [win32-x64](win32-x64/Dockerfile)
+Or with environment variable:
 
-### macOS
-
-Uses a macOS virtual machine hosted by GitHub to compile the shared libraries.
-The dylib files are compiled within the same build script as Linux.
-
-Depedency paths are modified to be the relative `@rpath` using `install_name_tool`.
+```
+npm_config_sharp_libvips_binary_host="http://localhost:8080/" \
+npm install sharp
+```
 
 ## Licences
 
