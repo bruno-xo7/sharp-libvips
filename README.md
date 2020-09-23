@@ -28,7 +28,7 @@ cp /packaging/* /local
 Publish them under HTTP on the correct folder [expected by Sharp](https://sharp.pixelplumbing.com/install#custom-prebuilt-binaries)
 ```
 mkdir v<VERSION>
-mv *.tar.br v<VERSION>/libvips-<VERSION>-linux-x64.tar.br
+cp *.tar.br v<VERSION>/libvips-<VERSION>-linux-x64.tar.br
 http-server -p 8080
 ```
 
@@ -37,6 +37,8 @@ Before installing Sharp depency with npm override the `sharp_libvips_binary_host
 With npm config option:
 ```
 npm config set sharp_libvips_binary_host "http://localhost:8080/"
+# sometimes a cache cleaning is necessary before the install
+rm -rf ~/.npm/_libvips
 npm install sharp
 ```
 
